@@ -40,10 +40,11 @@ class MatrixElement: public Module {
     public:
 
         MatrixElement(PoolPtr pool, const ParameterSet& parameters): Module(pool, parameters.getModuleName()) {
-
+           
             sqrt_s = parameters.globalParameters().get<double>("energy");
+           
             M_T = parameters.globalParameters().get<double>("top_mass");
-            
+
             use_pdf = parameters.get<bool>("use_pdf", true);
 
             m_partons = get<std::vector<std::vector<LorentzVector>>>(parameters.get<InputTag>("initialState"));
@@ -156,7 +157,7 @@ class MatrixElement: public Module {
             std::pair<std::vector<double>, std::vector<double>> initialState { toVector(partons[0]), toVector(partons[1]) };
 
             auto result = m_ME->compute(initialState, finalStates);
-
+            
             double x1 = std::abs(partons[0].Pz() / (sqrt_s / 2.));
             double x2 = std::abs(partons[1].Pz() / (sqrt_s / 2.));
 
