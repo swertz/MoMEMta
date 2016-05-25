@@ -21,7 +21,7 @@
 #include <momemta/ParameterSet.h>
 #include <momemta/Types.h>
 #include <momemta/Utils.h>
-
+#include <iomanip>
 #include <TMath.h>
 
 /*! \brief \f$\require{cancel}\f$ Final (main) Block F, describing \f$q_1 q_2 \to X + s_{13} (\to \cancel{p_1} p_3) + s_{24} (\to \cancel{p_2} p_4)\f$
@@ -118,7 +118,7 @@ class BlockF: public Module {
            
             // Leave the variables E2 and p2y as free parameters 
             std::vector<double> E2;
-            std::vector<double> p2y;
+            //std::vector<double> p2y;
             
             double p3x = p3.Px();
             double p3y = p3.Py();
@@ -149,18 +149,18 @@ class BlockF: public Module {
             const double Qm = sqrt_s*(q1-q2)/2.;
             const double Qp = sqrt_s*(q1+q2)/2.;
             
-            // p1x = alpha1*p2y + beta1*E2 + gamma1
+            /*// p1x = alpha1*p2y + beta1*E2 + gamma1
             // p1y = alpha2*p2y + beta2*E2 + gamma2
             // p1z = alpha3*p2y + beta3*E2 + gamma3
             // p2x = alpha4*p2y + beta4*E2 + gamma4
             // p2z = alpha5*p2y + beta5*E2 + gamma5
             // E1 = alpha6*p2y + beta6*E2 + gamma6
              
-            double alpha1 = (-p3z*p4y+p3y*p4z)/(-p3z*p4x+p3x*p4z);
-            double beta1 = (E4*p3z-E3*p4z)/(-p3z*p4x+p3x*p4z);
-            double gamma1 = (p44*p3z-2*E3*Eb*p4z+p33*p4z+2*p3z*p4x*pbx+
+            double alpha1 = (p3z*p4y-p3y*p4z)/(p3z*p4x-p3x*p4z);
+            double beta1 = -(E4*p3z-E3*p4z)/(p3z*p4x-p3x*p4z);
+            double gamma1 = -(p44*p3z-2*E3*Eb*p4z+p33*p4z+2*p3z*p4x*pbx+
                             2*p3y*p4z*pby+2*p3z*p4z*pbz-2*p3z*p4z*Qm+2*E3*p4z*Qp-
-                            p4z*(*s13)-p3z*(*s24))/(2*(-p3z*p4x+p3x*p4z));
+                            p4z*(*s13)-p3z*(*s24))/(2*(p3z*p4x-p3x*p4z));
             
             double alpha2 = -1;
             double beta2 = 0;
@@ -172,14 +172,14 @@ class BlockF: public Module {
                             2*p3y*p4x*pby+2*p3x*p4z*pbz-2*p3x*p4z*Qm+2*E3*p4x*Qp-
                             p4x*(*s13)-p3x*(*s24))/(p3z*p4x-p3x*p4z));
             
-            double alpha4 = (p3z*p4y-p3y*p4z)/(-p3z*p4x+p3x*p4z);
-            double beta4 = (-E4*p3z+E3*p4z)/(-p3z*p4x+p3x*p4z);
+            double alpha4 = -(p3z*p4y-p3y*p4z)/(p3z*p4x-p3x*p4z);
+            double beta4 = -(-E4*p3z+E3*p4z)/(p3z*p4x-p3x*p4z);
             double gamma4 = (-2*p44*p3z+4*E3*Eb*p4z-2*p33*p4z-
                              4*p3x*p4z*pbx-4*p3y*p4z*pby-4*p3z*p4z*pbz+
                              4*p3z*p4z*Qm-4*E3*p4z*Qp+2*p4z*(*s13)+
                              2*p3z*(*s24))/(-4*p3z*p4x+4*p3x*p4z);
               
-            double alpha5 = (-p3y*p4x+p3x*p4y)/(p3z*p4x-p3x*p4z);
+            double alpha5 = -(p3y*p4x-p3x*p4y)/(p3z*p4x-p3x*p4z);
             double beta5 = (-E4*p3x+E3*p4x)/(p3z*p4x-p3x*p4z);
             double gamma5 = 0.5*((-p44*p3x+2*E3*Eb*p4x-p33*p4x-
                             2*p3x*p4x*pbx-2*p3y*p4x*pby-2*p3z*p4x*pbz+
@@ -207,19 +207,66 @@ class BlockF: public Module {
             double b10 = 2*(alpha4*gamma4 + alpha5*gamma5);
             double b01 = 2*(beta4*gamma4 + beta5*gamma5);
             double b00 = SQ(gamma4) + SQ(gamma5);
+
+            LOG(debug) << std::setprecision(15);
+
+            LOG(debug) << "Denominator: " << p3z*p4x-p3x*p4z;
+            LOG(debug) << "Gammas: " << gamma1 << " " << gamma2 << " " << gamma3 << " " << gamma4 << " " << gamma5 << " " << gamma6 << " ";
+
+            LOG(debug) << "Trying to solve " << a11 << " " << a22  << " " << a12  << " " << a10  << " " << a01  << " " << a00  << " " << b11  << " " << b22  << " " << b12  << " " << b10  << " " << b01  << " " << b00;
             
-            solve2Quads(a11, a22, a12, a10, a01, a00, b11, b22, b12, b10, b01, b00, p2y, E2, false);
+            solve2Quads(a11, a22, a12, a10, a01, a00, b11, b22, b12, b10, b01, b00, p2y, E2, true);
             //In this case there will be up to 2 solutions
-            
+           
+            LOG(debug) << "Number of solutions: " << p2y.size();*/
+
+    // P2x = a1 E2 + a2 P2y + a3
+    // P2z = b1 E2 + b2 P2y + b3
+
+        const double ka = -4*p4.Px()*p3.Pz()+4*p3.Px()*p4.Pz();
+    const double kb = 2*(p3.Pz()*p4.Px()-p3.Px()*p4.Pz());
+
+        const double b1 = -(1./kb) * (2*p4.E()*p3.Px()-2*p3.E()*p4.Px());
+        const double b2 = -(1./kb) * (2*p3.Py()*p4.Px()-2*p3.Px()*p4.Py());
+        const double b3 = -(1./kb) * (pow(p4.M(),2)*p3.Px()-2*p3.E()*pb.E()*p4.Px()+pow(p3.M(),2)*p4.Px()+2*p3.Px()*p4.Px()*pb.Px()+2*p3.Py()*p4.Px()*pb.Py()+2*p3.Pz()*p4.Px()*pb.Pz()-2*p3.Pz()*p4.Px()*Qm+2*p3.E()*p4.Px()*Qp-p4.Px()*(*s13)-p3.Px()*(*s24));
+
+        const double a1 = (1./ka)*(-2*p4.Pz()*((-2)*p3.E())-2*p3.Pz()*2*p4.E());
+        const double a2 = (1./ka)*(-4*p3.Py()*p4.Pz()-2*p3.Pz()*(-2*p4.Py()));
+        const double a3 = -pb.Px()+(1./ka)*(-4*p4.Px()*pb.Px()*p3.Pz()-4*p3.Py()*pb.Py()*p4.Pz()-2*p4.Pz()*(pow(p3.M(),2)+2*p3.Pz()*(pb.Pz()-Qm)-2*p3.E()*(pb.E()-Qp)-*s13)-2*p3.Pz()*(pow(p4.M(),2)-*s24)) ;
+
+    // 0 = c1 E2 + c2 P2y + c3 
+    // E2 = d1 P2y + d2
+    
+        const double c1 = 2*(Qp-pb.E())+2*pb.Px()*a1-2*(Qm-pb.Pz())*b1;
+        const double c2 = 2*pb.Px()*a2+2*pb.Py()-2*(Qm-pb.Pz())*b2;
+        const double c3 = -pow(Qp-pb.E(),2)+pow(pb.Px(),2)+2*pb.Px()*a3+pow(pb.Py(),2)+pow(Qm-pb.Pz(),2)-2*(Qm-pb.Pz())*b3;
+
+
+    //cout << " c : " << c1 << " " << c2 << " " << c3 << endl;
+    
+    const double d1 = -c2/c1;
+    const double d2 = -c3/c1;
+
+    //cout << " d : " << d1 << " " << d2 << endl; 
+
+    // alpha*P2y^2 + beta*P2y + gamma = 0
+
+        const double alpha = pow(a1,2)*pow(d1,2)+pow(a2,2)+2*a1*a2*d1+1+pow(b1,2)*pow(d1,2)+pow(b2,2)+2*b1*b2*d1-pow(d1,2);
+        const double beta  = 2*pow(a1,2)*d1*d2+2*a1*a3*d1+2*a1*a2*d2+2*a2*a3+2*pow(b1,2)*d1*d2+2*b1*b3*d1+2*b1*b2*d2+2*b2*b3-2*d1*d2;
+        const double gamma = pow(a1,2)*pow(d2,2)+pow(a3,2)+2*a1*a3*d2+pow(b1,2)*pow(d2,2)+pow(b3,2)+2*b1*b3*d2-pow(d2,2);
+
+    
+    // Find p2y
+    std::vector<double> p2y;
+
+    solveQuadratic(alpha, beta, gamma, p2y, false);
+
             if (p2y.size() == 0)
                 return;
             
             for (size_t i=0; i<p2y.size(); i++) {
-                const double e1 = p2y.at(i);
+                /*const double e1 = p2y.at(i);
                 const double e2 = E2.at(i);
-                
-                if (e2 < 0.)
-                    continue;
                 
                 LorentzVector p1(alpha1*e1+beta1*e2+gamma1,     //p1x
                                  alpha2*e1+beta2*e2+gamma2,     //p1y
@@ -227,15 +274,43 @@ class BlockF: public Module {
                                  alpha6*e1+beta6*e2+gamma6      //E1
                                  );
 
-                if (p1.E() < 0.)
-                    continue;
-
                 LorentzVector p2(alpha4*e1+beta4*e2+gamma4,     //p2x
                                  e1,                            //p2y
                                  alpha5*e1+beta5*e2+gamma5,     //p2z
                                  e2                             //E2
-                                 );                  
+                                 );*/
                                
+                
+        const double P2X = a1*d1*p2y.at(i)+a1*d2+a2*p2y.at(i)+a3;
+        const double P2Z = b1*d1*p2y.at(i)+b1*d2+b2*p2y.at(i)+b3;
+
+                const double P1X = -pb.Px()-P2X;
+                const double P1Y = -pb.Py()-p2y.at(i);
+                const double P1Z = Qm-pb.Pz()-P2Z;
+
+        const double P2E = sqrt(pow(P2X,2)+pow(p2y.at(i),2)+pow(P2Z,2));
+                const double P1E = sqrt(pow(P1X,2)+pow(P1Y,2)+pow(P1Z,2));
+
+                LorentzVector p1(P1X, P1Y, P1Z, P1E);
+                LorentzVector p2(P2X, p2y.at(i), P2Z, P2E);
+
+                /*LOG(debug) << "-------- p1 " << p1;
+                LOG(debug) << "-------- p2 " << p2;
+                LOG(debug) << "-------- p3 " << p3;
+                LOG(debug) << "-------- p4 " << p4;
+                LOG(debug) << "-------- p1 mass: " << p1.M();
+                LOG(debug) << "-------- p2 mass: " << p2.M();
+                LOG(debug) << "-------- W+ mass: " << (p1+p3).M2() << " / s13: " << *s13;
+                LOG(debug) << "-------- W- mass: " << (p2+p4).M2() << " / s24: " << *s24;
+                LOG(debug) << "-------- Tot px: " << (p1+p2+p3+p4).Px();
+                LOG(debug) << "-------- Tot py: " << (p1+p2+p3+p4).Py();*/
+                
+                if (p2.E() < 0.)
+                    continue;
+                
+                if (p1.E() < 0.)
+                    continue;
+
                 // Check if solutions are physical
                 LorentzVector tot = p1 + p2 + p3 + p4;
                 double q1Pz = std::abs(tot.Pz() + tot.E()) / 2.;
@@ -243,7 +318,9 @@ class BlockF: public Module {
                 
                 if(q1Pz > sqrt_s/2 || q2Pz > sqrt_s/2)
                     continue;
-                
+
+                //LOG(debug) << "########## Adding solution ###########";
+
                 invisibles->push_back({p1, p2});
                 jacobians->push_back(computeJacobian(p1, p2, p3, p4));
             }    
