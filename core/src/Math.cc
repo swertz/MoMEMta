@@ -19,6 +19,7 @@
 #include <momemta/Math.h>
 
 #include <iostream>
+#include <iomanip>
 
 using namespace std;
 
@@ -40,6 +41,7 @@ bool solveQuadratic(const double a, const double b, const double c, std::vector<
     }
 
     const double rho = SQ(b) - 4. * a * c;
+    size_t start_index = roots.size();
 
     if (rho >= 0.) {
         if (b == 0.) {
@@ -57,6 +59,12 @@ bool solveQuadratic(const double a, const double b, const double c, std::vector<
                      << ", test = " << a * SQ(roots[i]) + b * roots[i] + c << endl;
             cout << endl;
         }
+        
+        // Apply one step of Newton's method to stabilise solutions
+        for (std::size_t i = start_index; i < roots.size(); i++) {
+            roots[i] = roots[i] - (a * SQ(roots[i]) + b * roots[i] + c) / (2 * a * roots[i] + b);
+        }
+
         return true;
     } else {
         if (verbose)
@@ -78,6 +86,8 @@ bool solveCubic(const double a, const double b, const double c, const double d,
     const double Q = SQ(an) / 9. - bn / 3.;
     const double R = CB(an) / 27. - an * bn / 6. + cn / 2.;
 
+    size_t start_index = roots.size();
+    
     if (SQ(R) < CB(Q)) {
         const double theta = acos(R / sqrt(CB(Q))) / 3.;
 
@@ -100,6 +110,11 @@ bool solveCubic(const double a, const double b, const double c, const double d,
         roots.push_back(x);
         roots.push_back(x);
     }
+    
+    // Apply one step of Newton's method to stabilise solutions
+    for (std::size_t i = start_index; i < roots.size(); i++) {
+        roots[i] = roots[i] - (a * CB(roots[i]) + b * SQ(roots[i]) + c * roots[i] + d) / (3 * a * SQ(roots[i]) + 2 * b * roots[i] + c);
+    }
 
     if (verbose) {
         cout << "Solutions of " << a << " x^3 + " << b << " x^2 + " << c << " x + " << d << ":"
@@ -118,6 +133,8 @@ bool solveQuartic(const double a, const double b, const double c, const double d
 
     if (!a)
         return solveCubic(b, c, d, e, roots, verbose);
+    
+    size_t start_index = roots.size();
 
     if (!b && !c && !d) {
         roots.push_back(0.);
@@ -159,6 +176,11 @@ bool solveQuartic(const double a, const double b, const double c, const double d
     }
 
     size_t nRoots = roots.size();
+
+    // Apply one step of Newton's method to stabilise solutions
+    for (std::size_t i = start_index; i < nRoots; i++) {
+        roots[i] = roots[i] - (a * QU(roots[i]) + b * CB(roots[i]) + c * SQ(roots[i]) + d * roots[i] + e) / (4 * a * CB(roots[i]) + 3 * b * SQ(roots[i]) + 2 * c * roots[i] + d);
+    }
 
     if (verbose) {
         if (nRoots) {
@@ -389,5 +411,6 @@ bool solve2Linear(const double a10, const double a01, const double a00, const do
 
 double BreitWigner(const double s, const double m, const double g) {
     double k = m * g;
-    return k / (std::pow(s - m * m, 2.) + std::pow(m * g, 2.));
+    return k / (SQ(s - m * m) + SQ(m * g));
 }
+
