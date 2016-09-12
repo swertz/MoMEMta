@@ -16,34 +16,41 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #pragma once
 
 #include <string>
+#include <vector>
+
+struct lua_State;
+struct PathElements;
 
 /**
- * \brief Notification callback fired when a module is declared.
- *
- * This callback is used from the lua interface when the user declare a new module in the
- * configuration file.
+ * \file
+ * \brief Lua binding of C++ Path class
  */
-class IOnModuleDeclared {
-    public:
-        virtual ~IOnModuleDeclared() {};
 
-        /** \brief A module is declared in the configuration file
-         *
-         * This function is called as soon as a new module is declared in the configuration
-         * file.
-         *
-         * A lua code like
-         *
-         * ```
-         * MatrixElement.module_name = {}
-         * ```
-         *
-         * will result in a call to this function with \p type equals to `MatrixElement` and
-         * \p name equals to `module_name`.
-         */
-        virtual void onModuleDeclared(const std::string& type, const std::string& name) = 0;
-};
+#define LUA_PATH_TYPE_NAME "Path"
+
+namespace lua {
+
+/**
+ * \brief Register Path into lua runtime
+ */
+void path_register(lua_State* L, void* ptr);
+
+/**
+ * \brief Create a new instance of Path
+ **/
+int path_new(lua_State* L);
+
+/**
+ * \brief Free an instance of Path
+ */
+int path_free(lua_State* L);
+
+/**
+ * \brief Retrieve an instance of Path from the lua stack
+ */
+PathElements* path_get(lua_State* L, int index);
+
+}

@@ -19,9 +19,9 @@
 
 #pragma once
 
-#include <momemta/ModuleFactory.h>
-#include <momemta/Pool.h>
+#include <momemta/impl/Pool.h>
 #include <momemta/InputTag.h>
+#include <momemta/ModuleFactory.h>
 
 /*! \defgroup modules Modules
  * \brief MoMEMta's built-in modules
@@ -29,12 +29,22 @@
  * Anyone of these module can be declared and used in the configuration file. More details about each module can be found in the class description.
  */
 
+
 /** \ingroup modules
  *
  * \brief Parent class for all the modules.
  */
 class Module {
     public:
+        // FIXME: Naming
+        enum class Status: std::int8_t {
+            OK,
+            NEXT,
+            ABORT
+        };
+
+        static std::string statusToString(const Status& status);
+
         /**
          * \brief Constructor
          *
@@ -58,6 +68,13 @@ class Module {
          * \brief Called once at the beginning of the integration
          */
         virtual void beginIntegration() {};
+
+        /**
+         * \brief Called once at the beginning of a loop
+         *
+         * Only relevant if the module is inside a loop
+         */
+        virtual void beginLoop() {};
         
         /**
          * \brief Main function
@@ -66,7 +83,14 @@ class Module {
          *
          * You'll usually want to override this function if you want your module to perform some task.
          */
-        virtual void work() { };
+        virtual Status work() { return Status::OK; };
+
+        /**
+         * \brief Called once at the end of a loop
+         *
+         * Only relevant if the module is inside a loop
+         */
+        virtual void endLoop() {};
         
         /**
          * \brief Called once at the end of the integration
@@ -77,20 +101,6 @@ class Module {
          * \brief Called once at the end of the job
          */
         virtual void finish() { };
-
-        /**
-         * \brief The number of integration's dimension used by the module
-         *
-         * If the module needs one or more integration's dimension to work, you must override
-         * this function and return the number of dimension needed.
-         *
-         * \return The number of integration's dimension added to the integrator.
-         *
-         * \note Default value is 0.
-         */
-        virtual size_t dimensions() const {
-            return 0;
-        }
 
         /**
          * \brief Check if module produces an output or not
@@ -152,11 +162,11 @@ class Module {
             return m_pool->put<T>({m_name, name}, std::forward<Args>(args)...);
         }
 
-        template<typename T> std::shared_ptr<const T> get(const std::string& module, const std::string& name) {
+        template<typename T> Value<T> get(const std::string& module, const std::string& name) {
             return m_pool->get<T>({module, name});
         }
 
-        template<typename T> std::shared_ptr<const T> get(const InputTag& tag) {
+        template<typename T> Value<T> get(const InputTag& tag) {
             return m_pool->get<T>(tag);
         }
 

@@ -19,6 +19,7 @@
 #include <momemta/Logging.h>
 #include <momemta/Module.h>
 #include <momemta/ParameterSet.h>
+#include <momemta/Solution.h>
 #include <momemta/Types.h>
 #include <momemta/Math.h>
 
@@ -56,7 +57,7 @@
  *
  * ### Integration dimension
  *
- * This module adds **2** dimensions to the integration.
+ * This module requires **2** phase-space points.
  *
  * ### Global parameters
  *
@@ -77,10 +78,11 @@
  *
  *   | Name | Type | %Description |
  *   |------|------|-------------|
- *   | `invisibles` | vector(vector(LorentzVector)) | LorentzVector of the invisible particles. Each element contains one of the possible solutions (\f$p1\f$, \f$p2\f$ in this case). |
- *   | `jacobians` | vector(double) | Jacobian of the performed change of variables, leading to an integration on \f$dq_1\f$, \f$dq_2\f$, \f$ds_{13}\f$, \f$ds_{24}\f$. One jacobian per solution. |
+ *   | `solutions` | vector(Solution) | Solutions of the change of variable. Each solution embed  the LorentzVectors of the invisible particles (\f$p1\f$, \f$p2\f$ in this case) and the associated jacobian. These solutions should be fed as input to the Looper module. |
  *
  * \note This block has been validated and is safe to use.
+ *
+ * \sa Looper module to loop over the solutions of this Block
  *
  * \ingroup modules
  */
@@ -90,33 +92,29 @@ class BlockF: public Module {
 
   BlockF(PoolPtr pool, const ParameterSet& parameters): Module(pool, parameters.getModuleName()) {
 
-            m_ps_point1 = parameters.get<InputTag>("q1");
-            m_ps_point1.resolve(pool);
-
-            m_ps_point2 = parameters.get<InputTag>("q2");
-            m_ps_point2.resolve(pool);
+            m_ps_point1 = get<double>(parameters.get<InputTag>("q1"));
+            m_ps_point2 = get<double>(parameters.get<InputTag>("q2"));
 
             sqrt_s = parameters.globalParameters().get<double>("energy");
 
             s13 = get<double>(parameters.get<InputTag>("s13"));
             s24 = get<double>(parameters.get<InputTag>("s24"));
 	    
-            m_particle_tags = parameters.get<std::vector<InputTag>>("inputs");
-            for (auto& t: m_particle_tags)
-                t.resolve(pool);
+            auto particle_tags = parameters.get<std::vector<InputTag>>("inputs");
+            for (auto& t: particle_tags)
+                m_particles.push_back(get<LorentzVector>(t));
         };
 
-        virtual void work() override {
+        virtual Status work() override {
 
-            invisibles->clear();
-            jacobians->clear();
+            solutions->clear();
 
             // Don't spend time on unphysical part of phase-space
-            if(*s13 > SQ(sqrt_s) || *s24 > SQ(sqrt_s))
-                return;
+            if (*s13 > SQ(sqrt_s) || *s24 > SQ(sqrt_s))
+                return Status::NEXT;
             
-            const LorentzVector& p3 = m_particle_tags[0].get<LorentzVector>();
-            const LorentzVector& p4 = m_particle_tags[1].get<LorentzVector>();
+            const LorentzVector& p3 = *m_particles[0];
+            const LorentzVector& p4 = *m_particles[1];
            
             // Leave the variables E2 and p2y as free parameters 
             std::vector<double> E2;
@@ -137,16 +135,16 @@ class BlockF: public Module {
             
             // Total visible momentum
             LorentzVector pb = p3 + p4;
-            for (size_t i = 2; i < m_particle_tags.size(); i++) {
-                pb += m_particle_tags[i].get<LorentzVector>();
+            for (size_t i = 2; i < m_particles.size(); i++) {
+                pb += *m_particles[i];
             }
             double Eb = pb.E();
             double pbx = pb.Px();
             double pby = pb.Py();
             double pbz = pb.Pz();
             
-            double q1 = m_ps_point1.get<double>();
-            double q2 = m_ps_point2.get<double>();
+            double q1 = *m_ps_point1;
+            double q2 = *m_ps_point2;
 
             const double Qm = sqrt_s*(q1-q2)/2.;
             const double Qp = sqrt_s*(q1+q2)/2.;
@@ -225,7 +223,7 @@ class BlockF: public Module {
             solveQuadratic(d2, d1, d0, p2y, false);
 
             if (p2y.size() == 0)
-                return;
+                return Status::NEXT;
             
             for (size_t i=0; i<p2y.size(); i++) {
                 const double e1 = p2y.at(i);      //p2y
@@ -251,8 +249,8 @@ class BlockF: public Module {
 
                 // Check if solutions are physical
                 LorentzVector tot = p1 + p2;
-                for (size_t i = 0; i < m_particle_tags.size(); i++){
-                    tot += m_particle_tags[i].get<LorentzVector>();
+                for (size_t i = 0; i < m_particles.size(); i++){
+                    tot += *m_particles[i];
                 }
                 double q1Pz = std::abs(tot.Pz() + tot.E()) / 2.;
                 double q2Pz = std::abs(tot.Pz() - tot.E()) / 2.;
@@ -260,15 +258,14 @@ class BlockF: public Module {
                 if(q1Pz > sqrt_s/2 || q2Pz > sqrt_s/2)
                     continue;
                 
-                invisibles->push_back({p1, p2});
-                jacobians->push_back(computeJacobian(p1, p2, p3, p4));
-            }    
+                auto jacobian = computeJacobian(p1, p2, p3, p4);
+                Solution s { {p1, p2}, jacobian, true };
+                solutions->push_back(s);
+            }
+
+            return solutions->size() > 0 ? Status::OK : Status::NEXT;
         }
     
-        virtual size_t dimensions() const override {
-            return 2;
-        }
-
         double computeJacobian(const LorentzVector& p1, const LorentzVector& p2, const LorentzVector& p3, const LorentzVector& p4) {
 
             const double E1  = p1.E();
@@ -299,14 +296,14 @@ class BlockF: public Module {
     private:
         double sqrt_s;
 
-        std::vector<InputTag> m_particle_tags;
+        // Inputs
+        Value<double> s13;
+        Value<double> s24;
+        Value<double> m_ps_point1;
+        Value<double> m_ps_point2;
+        std::vector<Value<LorentzVector>> m_particles;
 
-        std::shared_ptr<const double> s13;
-        std::shared_ptr<const double> s24;
-        InputTag m_ps_point1;
-        InputTag m_ps_point2;
-
-        std::shared_ptr<std::vector<std::vector<LorentzVector>>> invisibles = produce<std::vector<std::vector<ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>>>>>("invisibles");
-        std::shared_ptr<std::vector<double>> jacobians = produce<std::vector<double>>("jacobians");
+        // Outputs
+        std::shared_ptr<SolutionCollection> solutions = produce<SolutionCollection>("solutions");
 };
 REGISTER_MODULE(BlockF);

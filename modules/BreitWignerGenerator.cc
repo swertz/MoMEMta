@@ -42,7 +42,7 @@
  *
  * ### Integration dimension
  *
- * This module adds **1** dimension to the integration.
+ * This module requires **1** phase-space point.
  *
  * ### Parameters
  *
@@ -71,30 +71,31 @@ class BreitWignerGenerator: public Module {
 
         BreitWignerGenerator(PoolPtr pool, const ParameterSet& parameters): Module(pool, parameters.getModuleName()),
             mass(parameters.get<double>("mass")),
-            width(parameters.get<double>("width")),
-            m_ps_point(parameters.get<InputTag>("ps_point")) {
-            m_ps_point.resolve(pool);
+            width(parameters.get<double>("width")) {
+
+            m_ps_point = get<double>(parameters.get<InputTag>("ps_point"));
         };
 
-        virtual void work() override {
+        virtual Status work() override {
 
-            double psPoint = m_ps_point.get<double>();
+            double psPoint = *m_ps_point;
             const double range = M_PI / 2. + std::atan(mass / width);
             const double y = - std::atan(mass / width) + range * psPoint;
 
             *s = mass * width * std::tan(y) + (mass * mass);
             *jacobian = range * mass * width / (std::cos(y) * std::cos(y));
-        }
 
-        virtual size_t dimensions() const override {
-            return 1;
+            return Status::OK;
         }
 
     private:
-        const float mass;
-        const float width;
-        InputTag m_ps_point;
+        const double mass;
+        const double width;
 
+        // Inputs
+        Value<double> m_ps_point;
+
+        // Outputs
         std::shared_ptr<double> s = produce<double>("s");
         std::shared_ptr<double> jacobian = produce<double>("jacobian");
 

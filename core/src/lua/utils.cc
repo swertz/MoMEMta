@@ -19,13 +19,15 @@
 #include <lua/utils.h>
 
 #include <momemta/InputTag.h>
-#include <momemta/IOnModuleDeclared.h>
+#include <momemta/ILuaCallback.h>
 #include <momemta/Logging.h>
 #include <momemta/ModuleFactory.h>
 #include <momemta/ParameterSet.h>
 #include <momemta/Utils.h>
 
 #include <LibraryManager.h>
+#include <lua/Path.h>
+#include <lua/Types.h>
 
 namespace lua {
 
@@ -305,8 +307,13 @@ namespace lua {
                 LOG(trace) << "[to_any::function] << stack size = " << lua_gettop(L);
             } break;
 
+            case LUA_TUSERDATA: {
+                result = get_custom_type_ptr(L, absolute_index);
+
+            } break;
+
             default: {
-                LOG(fatal) << "Unsupported lua type: " << lua_typename(L, type);
+                LOG(fatal) << "Unsupported lua type: " << lua_type(L, absolute_index);
                 throw lua::invalid_configuration_file("");
             } break;
         }
@@ -390,7 +397,7 @@ namespace lua {
 
         lua_getfield(L, -1, "__ptr");
         void* cfg_ptr = lua_touserdata(L, -1);
-        IOnModuleDeclared* callback = static_cast<IOnModuleDeclared*>(cfg_ptr);
+        ILuaCallback* callback = static_cast<ILuaCallback*>(cfg_ptr);
 
         callback->onModuleDeclared(module_type, module_name);
 
@@ -478,37 +485,27 @@ namespace lua {
         return 1;
     }
 
-    void setup_hooks(lua_State* L, void* ptr) {
-        lua_pushlightuserdata(L, ptr);
-        lua_pushcclosure(L, load_modules, 1);
-        lua_setglobal(L, "load_modules");
+    int set_final_module(lua_State* L) {
+        int n = lua_gettop(L);
+        if (n == 0) {
+            luaL_error(L, "invalid number of arguments: at least one expected, got 0");
+        }
 
-        lua_pushlightuserdata(L, ptr);
-        lua_pushcclosure(L, parameter, 1);
-        lua_setglobal(L, "parameter");
+        void* cfg_ptr = lua_touserdata(L, lua_upvalueindex(1));
+        ILuaCallback* callback = static_cast<ILuaCallback*>(cfg_ptr);
+        
+        for(size_t i = 1; i <= size_t(n); i++) {
+            std::string input_tag = luaL_checkstring(L, i);
+            if (!InputTag::isInputTag(input_tag)) {
+                luaL_error(L, "'%s' is not a valid InputTag", input_tag.c_str());
+            }
+            callback->onIntegrandDeclared(InputTag::fromString(input_tag));
+        }
 
-        // Define the `getpspoint()` function in Lua and make it available in the global namespace.
-        // See generate_cuba_inputtag for more information.
-        lua_pushnumber(L, 1);
-        lua_pushcclosure(L, generate_cuba_inputtag, 1);
-        lua_setglobal(L, "getpspoint");
+        return 0;
     }
 
-    std::shared_ptr<lua_State> init_runtime(IOnModuleDeclared* callback) {
-
-        std::shared_ptr<lua_State> L(luaL_newstate(), lua_close);
-        luaL_openlibs(L.get());
-
-        // Register hooks function, like `load_modules`
-        lua::setup_hooks(L.get(), callback);
-
-        // Register existing modules
-        lua::register_modules(L.get(), callback);
-    
-        return L;
-    }
-
-    int generate_cuba_inputtag(lua_State* L) {
+    int add_integration_dimension(lua_State* L) {
         int n = lua_gettop(L);
         if (n != 0) {
             luaL_error(L, "invalid number of arguments: 0 expected, got %d", n);
@@ -522,8 +519,52 @@ namespace lua {
         std::string index_tag = "cuba::ps_points/";
         index_tag += std::to_string(cuba_index);
 
+        // Input tag is return value of the function
         push_any(L, index_tag);
+        
+        // Add an integration dimension in the configuration
+        void* cfg_ptr = lua_touserdata(L, lua_upvalueindex(2));
+        ILuaCallback* callback = static_cast<ILuaCallback*>(cfg_ptr);
+        callback->addIntegrationDimension();
 
         return 1;
+    }
+
+    void setup_hooks(lua_State* L, void* ptr) {
+        lua_pushlightuserdata(L, ptr);
+        lua_pushcclosure(L, load_modules, 1);
+        lua_setglobal(L, "load_modules");
+
+        lua_pushlightuserdata(L, ptr);
+        lua_pushcclosure(L, parameter, 1);
+        lua_setglobal(L, "parameter");
+
+        // Define the `add_dimension()` function in Lua and make it available in the global namespace.
+        // See add_integration_dimension for more information.
+        lua_pushnumber(L, 1);
+        lua_pushlightuserdata(L, ptr);
+        lua_pushcclosure(L, add_integration_dimension, 2);
+        lua_setglobal(L, "add_dimension");
+
+        // integrand() function
+        lua_pushlightuserdata(L, ptr);
+        lua_pushcclosure(L, set_final_module, 1);
+        lua_setglobal(L, "integrand");
+
+        path_register(L, ptr);
+    }
+
+    std::shared_ptr<lua_State> init_runtime(ILuaCallback* callback) {
+
+        std::shared_ptr<lua_State> L(luaL_newstate(), lua_close);
+        luaL_openlibs(L.get());
+
+        // Register hooks function, like `load_modules`
+        lua::setup_hooks(L.get(), callback);
+
+        // Register existing modules
+        lua::register_modules(L.get(), callback);
+    
+        return L;
     }
 }

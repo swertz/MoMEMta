@@ -18,8 +18,6 @@
 
 
 #include <momemta/InputTag.h>
-#include <momemta/Utils.h>
-#include <momemta/Pool.h>
 
 std::vector<std::string> split(const std::string& s, const std::string& delimiters) {
 
@@ -96,15 +94,6 @@ bool InputTag::isIndexed() const {
     return indexed;
 }
 
-void InputTag::resolve(PoolPtr pool) const {
-    if (resolved)
-        return;
-
-    // Reserve a block of memory inside the pool
-    // Since we don't know the type yet, the real allocation
-    // will be done during the first call to the get<>() function
-    this->pool = pool;
-    content = pool->reserve(*this);
-
-    resolved = true;
+bool InputTag::empty() const {
+    return module.empty() || parameter.empty();
 }

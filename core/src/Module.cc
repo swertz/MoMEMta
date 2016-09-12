@@ -16,25 +16,16 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#include <momemta/Module.h>
 
-#include <momemta/Pool.h>
-
-template<typename T> const T& InputTag::get() const {
-    if (! resolved) {
-        throw tag_not_resolved_error("You must call 'resolve' once before calling 'get'");
+std::string Module::statusToString(const Status& status) {
+    if (status == Status::OK) {
+        return "OK";
+    } else if (status == Status::NEXT) {
+        return "Next";
+    } else if (status == Status::ABORT) {
+        return "Abort";
     }
 
-    if (content.empty()) {
-        // Request the real content to the pool
-        content = pool->raw_get(*this);
-    }
-
-    if (isIndexed()) {
-        auto ptr = boost::any_cast<std::shared_ptr<std::vector<T>>>(content);
-        return (*ptr)[index];
-    } else {
-        auto ptr = boost::any_cast<std::shared_ptr<T>>(content);
-        return (*ptr);
-    }
+    return "Unknown status";
 }

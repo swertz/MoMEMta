@@ -30,8 +30,8 @@ class EmptyModule: public Module {
             // Empty
         };
 
-        virtual void work() override {
-
+        virtual Status work() override {
+            return Status::OK;
         }
 };
 REGISTER_MODULE(EmptyModule);

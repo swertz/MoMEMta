@@ -26,6 +26,8 @@
 #include <boost/any.hpp>
 
 #include <momemta/impl/InputTag_fwd.h>
+#include <momemta/Configuration.h>
+#include <momemta/Value.h>
 
 // A simple memory pool
 
@@ -37,8 +39,9 @@ struct PoolContent {
     bool valid; /// The state of the memory block. If false, it means that a module requested this block in read-mode, but no module actually provides the block.
 };
 
+// FIXME: Use a more descriptive name, like "ModuleDependencies"
 struct Description {
-    std::string module_name;
+    Configuration::Module module;
     std::vector<InputTag> inputs;
     std::vector<std::string> outputs;
 };
@@ -47,27 +50,19 @@ class Pool {
     public:
         using DescriptionMap = std::unordered_map<std::string, Description>;
 
-        template<typename T> std::shared_ptr<const T> get(const InputTag& tag) const {
-            if (tag.isIndexed()) {
-                throw std::invalid_argument("Indexed input tag cannot be passed as argument of the pool. Use the `get` function of the input tag to retrieve its content.");
-            }
+        Pool() = default;
 
-            auto it = m_storage.find(tag);
-            if (it == m_storage.end())
-                it = create<T>(tag, false);
+        /**
+         * \brief Allocate a new block in the memory pool.
+         *
+         * \param tag The input tag describing the memory block
+         * \param args Optional constructor arguments for creating a new instance of \p T
+         *
+         * \return A pointer to the newly allocated memory block.
+         */
+        template<typename T, typename... Args> std::shared_ptr<T> put(const InputTag& tag, Args... args);
 
-            PoolContent& v = it->second;
-            std::shared_ptr<T>& ptr = boost::any_cast<std::shared_ptr<T>&>(v.ptr);
-
-            if (! m_frozen) {
-                // Update current module description
-                assert(! m_current_module.empty());
-                Description& description = m_description[m_current_module];
-                description.inputs.push_back(tag);
-            }
-
-            return std::const_pointer_cast<const T>(ptr);
-        }
+        template<typename T> Value<T> get(const InputTag& tag) const;
 
         void alias(const InputTag& from, const InputTag& to);
 
@@ -93,7 +88,42 @@ class Pool {
         friend class MoMEMta;
         friend class Module;
 
+        template <typename U>
+        friend class ValueProxy;
+
         using PoolStorage = std::unordered_map<InputTag, PoolContent>;
+
+        friend struct InputTag;
+
+        void remove(const InputTag&, bool force = true);
+        void remove_if_invalid(const InputTag&);
+
+        boost::any reserve(const InputTag&);
+
+        template<typename T> std::shared_ptr<const T> raw_get(const InputTag& tag) const;
+
+        template<typename T, typename... Args> PoolStorage::iterator create(const InputTag& tag,
+                bool valid = true, Args... args) const;
+
+    public:
+        /**
+         * \brief Inform the pool of which module is currently created.
+         *
+         * It helps tracking down module dependencies.
+         *
+         * \param module The module beeing created
+         */
+        virtual void current_module(const Configuration::Module& module) final;
+
+        /**
+         * \brief Inform the pool of which module is currently created.
+         *
+         * It helps tracking down module dependencies. This signature indicates
+         * that the current module is virtual.
+         *
+         * \param name Name of the current virtual module
+         */
+        virtual void current_module(const std::string& name) final;
 
         class tag_not_found_error: public std::runtime_error {
             using std::runtime_error::runtime_error;
@@ -107,60 +137,8 @@ class Pool {
             using std::runtime_error::runtime_error;
         };
 
-        friend struct InputTag;
 
-        void remove(const InputTag&, bool force = true);
-        void remove_if_invalid(const InputTag&);
-
-        boost::any reserve(const InputTag&);
-        boost::any raw_get(const InputTag&);
-
-        template<typename T, typename... Args> std::shared_ptr<T> put(const InputTag& tag, Args... args) {
-            auto it = m_storage.find(tag);
-            if (it != m_storage.end()) {
-                if (it->second.valid)
-                    throw duplicated_tag_error("A module already produced the tag '" + tag.toString() + "'");
-                // A module already requested this block in read-mode. This will only work if the block does not require a non-trivial constructor:
-                if (sizeof...(Args))
-                    throw constructor_tag_error("A module already requested the tag '" + tag.toString() + "' which seems to require a constructor call. This is currently not supported.");
-                // Since the memory is allocated, simply consider the block as valid.
-                it->second.valid = true;
-
-                // If the block is empty, it's a delayed instanciation. Simply flag the block as valid, and allocate memory for it
-                if (it->second.ptr.empty()) {
-                    std::shared_ptr<T> ptr(new T(std::forward<Args>(args)...));
-                    it->second.ptr = boost::any(ptr);
-                }
-
-            } else {
-                it = create<T, Args ...>(tag, true, std::forward<Args>(args)...);
-            }
-
-            // Update current module description
-            assert(! m_current_module.empty());
-            Description& description = m_description[m_current_module];
-            description.outputs.push_back(tag.parameter);
-
-            return boost::any_cast<std::shared_ptr<T>>(it->second.ptr);
-        }
-
-        template<typename T, typename... Args> PoolStorage::iterator create(const InputTag& tag,
-                bool valid = true, Args... args) const {
-
-            std::shared_ptr<T> ptr(new T(std::forward<Args>(args)...));
-            PoolContent content = { boost::any(ptr), valid };
-
-            return m_storage.emplace(tag, content).first;
-        }
-
-        /**
-         * \brief Inform the pool of which module is currently created.
-         *
-         * It helps tracking down module dependencies.
-         *
-         * \param module The name of the module beeing created
-         */
-        virtual void current_module(const std::string& module) final;
+private:
 
         /**
          * \brief Freeze the memory pool.
@@ -171,11 +149,17 @@ class Pool {
          */
         virtual void freeze() final;
 
-        Pool() = default;
+        /**
+         * \brief Retrieve the description for the module being created.
+         *
+         * @return A reference to the module's description. If none exists, a new one is created.
+         */
+        virtual Description& get_description() const final;
+
         Pool(const Pool&) = delete;
         Pool& operator=(const Pool&) = delete;
 
-        std::string m_current_module; /// Name of the module currently created.
+        Configuration::Module m_current_module; /// Module currently created.
         bool m_frozen = false; /// If true, no modification of the pool is allowed
 
         mutable PoolStorage m_storage;

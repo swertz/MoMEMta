@@ -36,7 +36,7 @@
  *
  * ### Integration dimension
  *
- * This module adds **1** dimension to the integration.
+ * This module requires **1** phase-space point.
  *
  * ### Inputs
  *
@@ -59,17 +59,14 @@ class FlatTransferFunctionOnPhi: public Module {
     public:
 
         FlatTransferFunctionOnPhi(PoolPtr pool, const ParameterSet& parameters): Module(pool, parameters.getModuleName()) {
-            m_ps_point = parameters.get<InputTag>("ps_point");
-            m_ps_point.resolve(pool);
-            
-            m_input = parameters.get<InputTag>("reco_particle");
-            m_input.resolve(pool);
+            m_ps_point = get<double>(parameters.get<InputTag>("ps_point"));
+            m_input = get<LorentzVector>(parameters.get<InputTag>("reco_particle"));
         };
 
-        virtual void work() override {
+        virtual Status work() override {
 
-            const double& ps_point = m_ps_point.get<double>();
-            const LorentzVector& reco_particle = m_input.get<LorentzVector>();
+            const double& ps_point = *m_ps_point;
+            const LorentzVector& reco_particle = *m_input;
 
             m_Rotation.SetAngle(2*M_PI*ps_point);
 
@@ -77,19 +74,18 @@ class FlatTransferFunctionOnPhi: public Module {
             
             // Compute TF*jacobian, ie the jacobian of the transformation of [0,1]->[0,2pi]
             *TF_times_jacobian = 2*M_PI;
-        }
 
-        virtual size_t dimensions() const override {
-            return 1;
+            return Status::OK;
         }
 
     private:
-
-        InputTag m_ps_point;
-        InputTag m_input;
-
         ROOT::Math::RotationZ m_Rotation;
 
+        // Inputs
+        Value<double> m_ps_point;
+        Value<LorentzVector> m_input;
+
+        // Outputs
         std::shared_ptr<LorentzVector> output = produce<LorentzVector>("output");
         std::shared_ptr<double> TF_times_jacobian = produce<double>("TF_times_jacobian");
 };

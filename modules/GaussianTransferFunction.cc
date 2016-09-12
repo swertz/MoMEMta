@@ -38,7 +38,7 @@
  *
  * ### Integration dimension
  *
- * This module adds **1** dimension to the integration.
+ * This module requires **1** phase-space point.
  *
  * ### Parameters
  *
@@ -67,20 +67,17 @@ class GaussianTransferFunction: public Module {
     public:
 
         GaussianTransferFunction(PoolPtr pool, const ParameterSet& parameters): Module(pool, parameters.getModuleName()) {
-            m_ps_point = parameters.get<InputTag>("ps_point");
-            m_input = parameters.get<InputTag>("reco_particle");
-
-            m_ps_point.resolve(pool);
-            m_input.resolve(pool);
+            m_ps_point = get<double>(parameters.get<InputTag>("ps_point"));
+            m_input = get<LorentzVector>(parameters.get<InputTag>("reco_particle"));
 
             m_sigma = parameters.get<double>("sigma", 0.10);
             m_sigma_range = parameters.get<double>("sigma_range", 5);
         };
 
-        virtual void work() override {
+        virtual Status work() override {
 
-            const double& ps_point = m_ps_point.get<double>();
-            const LorentzVector& reco_particle = m_input.get<LorentzVector>();
+            const double& ps_point = *m_ps_point;
+            const LorentzVector& reco_particle = *m_input;
 
             double sigma = reco_particle.E() * m_sigma;
 
@@ -99,19 +96,19 @@ class GaussianTransferFunction: public Module {
 
             // Compute jacobian
             *TF_times_jacobian = ROOT::Math::normal_pdf(gen_E, sigma, reco_particle.E()) * range * dP_over_dE(*output);
-        }
 
-        virtual size_t dimensions() const override {
-            return 1;
+            return Status::OK;
         }
 
     private:
-        InputTag m_ps_point;
-        InputTag m_input;
-
         double m_sigma;
         double m_sigma_range;
 
+        // Inputs
+        Value<double> m_ps_point;
+        Value<LorentzVector> m_input;
+
+        // Outputs
         std::shared_ptr<LorentzVector> output = produce<LorentzVector>("output");
         std::shared_ptr<double> TF_times_jacobian = produce<double>("TF_times_jacobian");
 

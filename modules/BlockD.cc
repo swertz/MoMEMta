@@ -19,6 +19,7 @@
 
 #include <momemta/ParameterSet.h>
 #include <momemta/Module.h>
+#include <momemta/Solution.h>
 #include <momemta/Types.h>
 #include <momemta/Math.h>
 
@@ -46,7 +47,7 @@
  *
  * ### Integration dimension
  *
- * This module adds **0** dimension to the integration.
+ * This module requires **0** phase-space point.
  *
  * ### Global parameters
  *
@@ -72,10 +73,11 @@
  *
  *   | Name | Type | %Description |
  *   |------|------|--------------|
- *   | `invisibles` | vector(vector(LorentzVector)) | LorentzVectors of the invisible particles, one entry (ie. one \f$(p_1, p_2)\f$ pair) per solution. |
- *   | `jacobians` | vector(double) | Jacobian of the performed change of variables (one entry per solution). |
+ *   | `solutions` | vector(Solution) | Solutions of the change of variable. Each solution embed  the LorentzVectors of the invisible particles (ie. one \f$(p_1, p_2)\f$ pair) and the associated jacobian. These solutions should be fed as input to the Looper module. |
  *
  * \note This block has been validated and is safe to use.
+ *
+ * \sa Looper module to loop over the solutions of this Block
  *   
  * \ingroup modules
  */
@@ -92,33 +94,34 @@ class BlockD: public Module {
             s25 = get<double>(parameters.get<InputTag>("s25"));
             s256 = get<double>(parameters.get<InputTag>("s256"));
 
-            m_particle_tags = parameters.get<std::vector<InputTag>>("inputs");
-            for (auto& t: m_particle_tags)
-                t.resolve(pool);
+            auto particle_tags = parameters.get<std::vector<InputTag>>("inputs");
+            for (auto& t: particle_tags)
+                m_particles.push_back(get<LorentzVector>(t));
 
             // If the met input is specified, get it, otherwise retrieve default
             // one ("input::met")
+            InputTag met_tag;
             if (parameters.exists("met")) {
-                m_met_tag = parameters.get<InputTag>("met");
+                met_tag = parameters.get<InputTag>("met");
             } else {
-                m_met_tag = InputTag({"input", "met"});
+                met_tag = InputTag({"input", "met"});
             }
-            m_met_tag.resolve(pool);
+
+            m_met = get<LorentzVector>(met_tag);
         };
 
-        virtual void work() override {
+        virtual Status work() override {
 
-            invisibles->clear();
-            jacobians->clear();
+            solutions->clear();
 
             // Don't spend time on unphysical corner of the phase-space
             if (*s13 >= *s134 || *s25 >= *s256 || *s13 >= SQ(sqrt_s) || *s134 >= SQ(sqrt_s) || *s25 >= SQ(sqrt_s) || *s256 >= SQ(sqrt_s))
-                return;
+                return Status::NEXT;
 
-            const LorentzVector& p3 = m_particle_tags[0].get<LorentzVector>();
-            const LorentzVector& p4 = m_particle_tags[1].get<LorentzVector>();
-            const LorentzVector& p5 = m_particle_tags[2].get<LorentzVector>();
-            const LorentzVector& p6 = m_particle_tags[3].get<LorentzVector>();
+            const LorentzVector& p3 = *m_particles[0];
+            const LorentzVector& p4 = *m_particles[1];
+            const LorentzVector& p5 = *m_particles[2];
+            const LorentzVector& p6 = *m_particles[3];
 
             // pT will be used to fix the transverse momentum of the reconstructed neutrinos
             // We can either enforce momentum conservation by disregarding the MET, ie:
@@ -130,11 +133,11 @@ class BlockD: public Module {
             
             LorentzVector pT;
             if (pT_is_met) {
-                pT = - m_met_tag.get<LorentzVector>(); 
+                pT = - *m_met;
             } else {
                 pT = p3 + p4 + p5 + p6;
-                for (size_t i = 4; i < m_particle_tags.size(); i++) {
-                    pT += m_particle_tags[i].get<LorentzVector>();
+                for (size_t i = 4; i < m_particles.size(); i++) {
+                    pT += *m_particles[i];
                 }
             }
 
@@ -216,7 +219,7 @@ class BlockD: public Module {
             // For each solution (E1,E2), find the neutrino 4-momenta p1,p2
 
             if (E1.size() == 0)
-                return;
+                return Status::NEXT;
 
             for(unsigned int i=0; i<E1.size(); i++){
                 const double e1 = E1.at(i);
@@ -239,21 +242,20 @@ class BlockD: public Module {
 
                 // Check if solutions are physical
                 LorentzVector tot = p1 + p2;
-                for (size_t i = 0; i < m_particle_tags.size(); i++) {
-                    tot += m_particle_tags[i].get<LorentzVector>();
+                for (size_t i = 0; i < m_particles.size(); i++) {
+                    tot += *m_particles[i];
                 }
                 double q1Pz = std::abs(tot.Pz() + tot.E()) / 2.;
                 double q2Pz = std::abs(tot.Pz() - tot.E()) / 2.;
                 if(q1Pz > sqrt_s/2 || q2Pz > sqrt_s/2)
                     continue;
 
-                invisibles->push_back({p1, p2});
-                jacobians->push_back(computeJacobian(p1, p2, p3, p4, p5, p6));
+                double jacobian = computeJacobian(p1, p2, p3, p4, p5, p6);
+                Solution s { {p1, p2}, jacobian, true };
+                solutions->push_back(s);
             }
-        }
 
-        virtual size_t dimensions() const override {
-            return 0;
+            return solutions->size() > 0 ? Status::OK : Status::NEXT;
         }
 
         double computeJacobian(const LorentzVector& p1, const LorentzVector& p2, const LorentzVector& p3, const LorentzVector& p4, const LorentzVector& p5, const LorentzVector& p6) {
@@ -343,15 +345,15 @@ class BlockD: public Module {
         double sqrt_s;
         bool pT_is_met;
 
-        std::vector<InputTag> m_particle_tags;
-        InputTag m_met_tag;
+        // Inputs
+        Value<double> s13;
+        Value<double> s134;
+        Value<double> s25;
+        Value<double> s256;
+        std::vector<Value<LorentzVector>> m_particles;
+        Value<LorentzVector> m_met;
 
-        std::shared_ptr<const double> s13;
-        std::shared_ptr<const double> s134;
-        std::shared_ptr<const double> s25;
-        std::shared_ptr<const double> s256;
-
-        std::shared_ptr<std::vector<std::vector<LorentzVector>>> invisibles = produce<std::vector<std::vector<ROOT::Math::LorentzVector<ROOT::Math::PxPyPzE4D<double>>>>>("invisibles");
-        std::shared_ptr<std::vector<double>> jacobians = produce<std::vector<double>>("jacobians");
+        // Outputs
+        std::shared_ptr<SolutionCollection> solutions = produce<SolutionCollection>("solutions");
 };
 REGISTER_MODULE(BlockD);

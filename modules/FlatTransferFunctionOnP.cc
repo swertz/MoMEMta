@@ -34,7 +34,7 @@
  *
  * ### Integration dimension
  *
- * This module adds **1** dimension to the integration.
+ * This module requires **1** phase-space point.
  *
  * ### Parameters
  *
@@ -64,20 +64,17 @@ class FlatTransferFunctionOnP: public Module {
     public:
 
         FlatTransferFunctionOnP(PoolPtr pool, const ParameterSet& parameters): Module(pool, parameters.getModuleName()) {
-            m_ps_point = parameters.get<InputTag>("ps_point");
-            m_ps_point.resolve(pool);
-            
-            m_input = parameters.get<InputTag>("reco_particle");
-            m_input.resolve(pool);
+            m_ps_point = get<double>(parameters.get<InputTag>("ps_point"));
+            m_input = get<LorentzVector>(parameters.get<InputTag>("reco_particle"));
 
             m_PMin = parameters.get<double>("min");
             m_PMax = parameters.get<double>("max");
         };
 
-        virtual void work() override {
+        virtual Status work() override {
 
-            const double& ps_point = m_ps_point.get<double>();
-            const LorentzVector& reco_particle = m_input.get<LorentzVector>();
+            const double& ps_point = *m_ps_point;
+            const LorentzVector& reco_particle = *m_input;
 
             const double range = m_PMax - m_PMin;
             const double gen_P = m_PMin + range*ps_point;
@@ -92,19 +89,19 @@ class FlatTransferFunctionOnP: public Module {
 
             // Compute TF*jacobian, ie the jacobian of the transformation of [0,1]->[range_min,range_max]
             *TF_times_jacobian = range;
-        }
 
-        virtual size_t dimensions() const override {
-            return 1;
+            return Status::OK;
         }
 
     private:
 
-        InputTag m_ps_point;
-        InputTag m_input;
-
         double m_PMin, m_PMax;
 
+        // Inputs
+        Value<double> m_ps_point;
+        Value<LorentzVector> m_input;
+
+        // Outputs
         std::shared_ptr<LorentzVector> output = produce<LorentzVector>("output");
         std::shared_ptr<double> TF_times_jacobian = produce<double>("TF_times_jacobian");
 };

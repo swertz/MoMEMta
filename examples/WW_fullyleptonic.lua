@@ -38,15 +38,16 @@ cuba = {
 }
 
 BreitWignerGenerator.flatter_s13 = {
-    -- getpspoint() generates an input tag of type `cuba::ps_points/i`
+    -- add_dimension() generates an input tag of type `cuba::ps_points/i`
     -- where `i` is automatically incremented each time the function is called.
-    ps_point = getpspoint(),
+    -- This function allows MoMEMta to track how many dimensions are needed for the integration.
+    ps_point = add_dimension(),
     mass = parameter('W_mass'),
     width = parameter('W_width')
 }
 
 BreitWignerGenerator.flatter_s24 = {
-    ps_point = getpspoint(),
+    ps_point = add_dimension(),
     mass = parameter('W_mass'),
     width = parameter('W_width')
 }
@@ -54,13 +55,13 @@ BreitWignerGenerator.flatter_s24 = {
 
 if USE_TF then
     GaussianTransferFunction.tf_p1 = {
-        ps_point = getpspoint(),
+        ps_point = add_dimension(),
         reco_particle = 'input::particles/1',
         sigma = 0.05,
     }
 
     GaussianTransferFunction.tf_p2 = {
-        ps_point = getpspoint(),
+        ps_point = add_dimension(),
         reco_particle = 'input::particles/2',
         sigma = 0.10,
     }
@@ -71,65 +72,76 @@ BlockF.blockf = {
 
     s13 = 'flatter_s13::s',
     s24 = 'flatter_s24::s',
-    q1 = getpspoint(),
-    q2 = getpspoint()
+    q1 = add_dimension(),
+    q2 = add_dimension()
 }
 
-BuildInitialState.initial_state = {
-    invisibles = {
-        'blockf::invisibles',
-    },
-
-    particles = inputs
+Looper.looper = {
+    solutions = "blockf::solutions",
+    path = Path("initial_state", "WW", "integrand")
 }
 
-jacobians = {'flatter_s13::jacobian', 'flatter_s24::jacobian'}
+-- Loop
 
-if USE_TF then
-    append(jacobians, {'tf_p1::TF_times_jacobian', 'tf_p2::TF_times_jacobian'})
-end
-
-MatrixElement.WW = {
-  pdf = 'CT10nlo',
-  pdf_scale = parameter('W_mass'),
-
-  matrix_element = 'pp_WW_fully_leptonic_sm_P1_Sigma_sm_uux_epvemumvmx',
-  matrix_element_parameters = {
-      card = '../MatrixElements/Cards/param_card.dat'
-  },
-
-  initialState = 'initial_state::output',
-
-  invisibles = {
-    input = 'blockf::invisibles',
-    jacobians = 'blockf::jacobians',
-    ids = {
-      {
-        pdg_id = 12,
-        me_index = 2,
-      },
-
-      {
-        pdg_id = -14,
-        me_index = 4,
-      }
+    BuildInitialState.initial_state = {
+        solution = 'looper::solution',
+        particles = inputs
     }
-  },
 
-  particles = {
-    inputs = inputs,
-    ids = {
-      {
-        pdg_id = -11,
-        me_index = 1,
+    jacobians = {'flatter_s13::jacobian', 'flatter_s24::jacobian'}
+
+    if USE_TF then
+        append(jacobians, {'tf_p1::TF_times_jacobian', 'tf_p2::TF_times_jacobian'})
+    end
+
+    MatrixElement.WW = {
+      pdf = 'CT10nlo',
+      pdf_scale = parameter('W_mass'),
+
+      matrix_element = 'pp_WW_fully_leptonic_sm_P1_Sigma_sm_uux_epvemumvmx',
+      matrix_element_parameters = {
+          card = '../MatrixElements/Cards/param_card.dat'
       },
 
-      {
-        pdg_id = 13,
-        me_index = 3,
+      initialState = 'initial_state::partons',
+
+      invisibles = {
+        input = 'looper::solution',
+        ids = {
+          {
+            pdg_id = 12,
+            me_index = 2,
+          },
+
+          {
+            pdg_id = -14,
+            me_index = 4,
+          }
+        }
       },
+
+      particles = {
+        inputs = inputs,
+        ids = {
+          {
+            pdg_id = -11,
+            me_index = 1,
+          },
+
+          {
+            pdg_id = 13,
+            me_index = 3,
+          },
+        }
+      },
+
+      jacobians = jacobians
     }
-  },
 
-  jacobians = jacobians
-}
+    DoubleSummer.integrand = {
+        input = "WW::output"
+    }
+
+-- End of loop
+
+integrand("integrand::sum")
