@@ -26,6 +26,7 @@
 #include <momemta/InputTag.h>
 #include <momemta/impl/traits.h>
 #include <momemta/Logging.h>
+#include <momemta/Utils.h>
 
 #include <boost/any.hpp>
 
@@ -83,7 +84,16 @@ class ParameterSet {
             if (value == m_set.end())
                 throw not_found_error("Parameter '" + name + "' not found.");
 
-            return boost::any_cast<const T&>(value->second.value);
+            try {
+                return boost::any_cast<const T&>(value->second.value);
+            } catch (boost::bad_any_cast e) {
+                LOG(fatal) << "Exception while trying to get parameter '" << name << "'. Requested a '"
+                           << demangle(typeid(T).name())
+                           << "' while parameter is a '"
+                           << demangle(value->second.value.type().name())
+                           << "'";
+                throw e;
+            }
         }
 
         template<typename T> const T& get(const std::string& name, const T& defaultValue) const {
@@ -91,7 +101,16 @@ class ParameterSet {
             if (value == m_set.end())
                 return defaultValue;
 
-            return boost::any_cast<const T&>(value->second.value);
+            try {
+                return boost::any_cast<const T&>(value->second.value);
+            } catch (boost::bad_any_cast e) {
+                LOG(fatal) << "Exception while trying to get parameter '" << name << "'. Requested a '"
+                           << demangle(typeid(T).name())
+                           << "' while parameter is a '"
+                           << demangle(value->second.value.type().name())
+                           << "'";
+                throw e;
+            }
         }
 
         bool exists(const std::string& name) const;
@@ -191,6 +210,8 @@ class ParameterSet {
          * @return A clone of this ParameterSet. You must take ownership of the returned value.
          */
         virtual ParameterSet* clone() const;
+
+        std::vector<std::string> getNames() const;
 
     protected:
         friend class ConfigurationReader;

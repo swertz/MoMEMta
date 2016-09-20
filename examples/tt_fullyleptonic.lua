@@ -6,6 +6,15 @@ function append(t1, t2)
     return t1
 end
 
+function copy_and_append(t1, t2)
+    local t3 = {}
+
+    append(t3, t1)
+    append(t3, t2)
+
+    return t3
+end
+
 load_modules('libempty_module.so')
 load_modules('MatrixElements/dummy/libme_dummy.so')
 
@@ -85,13 +94,13 @@ BreitWignerGenerator.flatter_s256 = {
 }
 
 if USE_TF then
-    GaussianTransferFunction.tf_p1 = {
+    GaussianTransferFunctionOnEnergy.tf_p1 = {
         ps_point = add_dimension(),
         reco_particle = 'input::particles/1',
         sigma = 0.05,
     }
 
-    GaussianTransferFunction.tf_p2 = {
+    GaussianTransferFunctionOnEnergy.tf_p2 = {
         ps_point = add_dimension(),
         reco_particle = 'input::particles/2',
         sigma = 0.10,
@@ -105,13 +114,13 @@ if USE_TF then
     --     th2_name = 'Binned_Egen_DeltaE_Norm_jet',
     -- }
 
-    GaussianTransferFunction.tf_p3 = {
+    GaussianTransferFunctionOnEnergy.tf_p3 = {
         ps_point = add_dimension(),
         reco_particle = 'input::particles/3',
         sigma = 0.05,
     }
 
-    GaussianTransferFunction.tf_p4 = {
+    GaussianTransferFunctionOnEnergy.tf_p4 = {
         ps_point = add_dimension(),
         reco_particle = 'input::particles/4',
         sigma = 0.10,
@@ -124,6 +133,10 @@ if USE_TF then
     --     th2_name = 'Binned_Egen_DeltaE_Norm_jet',
     -- }
 end
+
+StandardPhaseSpace.phaseSpaceOut = {
+    particles = inputs -- only on visible particles
+}
 
 -- Declare module before the permutator to test read-access in the pool
 -- for non-existant values.
@@ -155,14 +168,13 @@ Looper.looper = {
     path = Path("boost", "ttbar", "dmem", "integrand")
 }
 
+    -- Block D produce solutions with two particles
+    full_inputs = copy_and_append(inputs, {'looper::particles/1', 'looper::particles/2'})
+
     BuildInitialState.boost = {
-        solution = 'looper::solution',
-
         do_transverse_boost = true,
-
-        particles = inputs
+        particles = full_inputs
     }
-
 
     jacobians = {'flatter_s13::jacobian', 'flatter_s134::jacobian', 'flatter_s25::jacobian', 'flatter_s256::jacobian'}
 
@@ -170,34 +182,25 @@ Looper.looper = {
         append(jacobians, {'tf_p1::TF_times_jacobian', 'tf_p2::TF_times_jacobian', 'tf_p3::TF_times_jacobian', 'tf_p4::TF_times_jacobian'})
     end
 
+    append(jacobians, {'phaseSpaceOut::phase_space', 'looper::jacobian'})
+
     MatrixElement.ttbar = {
       pdf = 'CT10nlo',
       pdf_scale = parameter('top_mass'),
 
       matrix_element = 'pp_ttx_fully_leptonic',
       matrix_element_parameters = {
-          card = '../MatrixElements/Cards/param_card.dat'
+          card = '../MatrixElements/Cards/param_card.dat',
+      },
+
+      override_parameters = {
+          mdl_MT = parameter('top_mass'),
       },
 
       initialState = 'boost::partons',
 
-      invisibles = {
-        input = 'looper::solution',
-        ids = {
-          {
-            pdg_id = 12,
-            me_index = 2,
-          },
-
-          {
-            pdg_id = -14,
-            me_index = 5,
-          }
-        }
-      },
-
       particles = {
-        inputs = inputs,
+        inputs = full_inputs,
         ids = {
           {
             pdg_id = -11,
@@ -218,6 +221,16 @@ Looper.looper = {
             pdg_id = -5,
             me_index = 6,
           },
+
+          {
+            pdg_id = 12,
+            me_index = 2,
+          },
+
+          {
+            pdg_id = -14,
+            me_index = 5,
+          }
         }
       },
 
@@ -230,8 +243,7 @@ Looper.looper = {
       n_bins = 500,
 
       ps_weight = 'cuba::ps_weight',
-      particles = inputs,
-      invisibles = 'looper::solution',
+      particles = full_inputs,
       me_output = 'ttbar::output',
     }
 
