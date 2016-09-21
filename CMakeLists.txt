@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.2.1 FATAL_ERROR)
-project(MoMEMta)
+project(MoMEMta C CXX Fortran)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/modules")
 
@@ -257,6 +257,10 @@ if(EXAMPLES)
     set_target_properties(example_WW_fullyleptonic PROPERTIES OUTPUT_NAME
       "WW_fullyleptonic.exe")
 
+    add_executable(example_HH_bbbb "examples/HH_bbbb.cc")
+    target_link_libraries(example_HH_bbbb momemta)
+    set_target_properties(example_HH_bbbb PROPERTIES OUTPUT_NAME
+      "HH_bbbb.exe")
 endif()
 
 # Test executables
