@@ -257,7 +257,7 @@ Graph build(const Pool::DescriptionMap& description, std::vector<ModulePtr>& mod
 
 
     // Check for if a module use a Looper output but is not actually declared in the looper path
-    for (const auto& vertex: sorted_vertices) {
+    /*for (const auto& vertex: sorted_vertices) {
         if (g[vertex].configuration_module.type == "Looper") {
             // We know that the module is a Looper
             // grab its execution path from its configuration
@@ -288,7 +288,7 @@ Graph build(const Pool::DescriptionMap& description, std::vector<ModulePtr>& mod
                 }
             }
         }
-    }
+    }*/
 
     return g;
 }

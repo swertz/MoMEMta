@@ -16,6 +16,7 @@ parameters = {
 cuba = {
     relative_accuracy = 0.01,
     verbosity = 3,
+    n_start = 100
 }
 
 
@@ -40,11 +41,6 @@ SecondaryBlockCD.secBlockCD = {
         gen_p2 = 'tf_p3::output',
 }
 
-Looper.looperMB = {
-    solutions = 'blockA::solutions',
-    path = Path("boost", "tf_evaluator1", "tf_evaluator2", "HH_bbbb", "integrand"),
-}
-
 Looper.looperSB = {
     solutions = 'secBlockCD::gen_p1',
     path = Path("blockA", "tf_evaluator3", "looperMB"),
@@ -59,6 +55,26 @@ BlockA.blockA = {
   }
 }
 
+GaussianTransferFunctionOnEnergyEvaluator.tf_evaluator3 = {
+    reco_particle = 'input::particles/4',
+    gen_particle = 'looperSB::particles/1',
+}
+
+Looper.looperMB = {
+    solutions = 'blockA::solutions',
+    path = Path("boost", "tf_evaluator1", "tf_evaluator2", "phaseSpaceOut", "HH_bbbb", "integrand"),
+}
+
+BuildInitialState.boost = {
+  do_transverse_boost = true,
+  particles = {
+    'looperSB::particles/1',
+    'tf_p3::output',
+    'looperMB::particles/1',
+    'looperMB::particles/2',
+  }
+}
+
 GaussianTransferFunctionOnEnergyEvaluator.tf_evaluator1 = {
     reco_particle = 'input::particles/1',
     gen_particle = 'looperMB::particles/1',
@@ -69,27 +85,9 @@ GaussianTransferFunctionOnEnergyEvaluator.tf_evaluator2 = {
     gen_particle = 'looperMB::particles/2',
 }
 
-GaussianTransferFunctionOnEnergyEvaluator.tf_evaluator3 = {
-    reco_particle = 'input::particles/4',
-    gen_particle = 'looperSB::particles/1',
-}
-
-BuildInitialState.boost = {
-  do_transverse_boost = true,
-  particles = {
-    'looperMB::particles/1',
-    'looperMB::particles/2',
-    'looperMB::particles/3',
-    'looperMB::particles/4',
-  }
-}
-
 StandardPhaseSpace.phaseSpaceOut = {
   particles = {
-    'looperMB::particles/1',
-    'looperMB::particles/2',
-    'looperMB::particles/3',
-    'looperMB::particles/4',
+    'tf_p3::output',
   }
 }
 
@@ -119,10 +117,10 @@ MatrixElement.HH_bbbb = {
 
   particles = {
     inputs = {
+      'looperSB::particles/1',
+      'tf_p3::output',
       'looperMB::particles/1',
       'looperMB::particles/2',
-      'looperMB::particles/3',
-      'looperMB::particles/4',
     },
 
     ids = {
